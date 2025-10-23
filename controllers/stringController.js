@@ -59,7 +59,6 @@ exports.getStringStat = async (req, res) => {
     const stringStat = await StringStat.findOne({ where: { value: string_value } });
 
     if (!stringStat) {
-      // FIX: Changed status code from 44 to 404
       return res.status(404).json({ error: 'String does not exist in the system' });
     }
 
@@ -79,14 +78,21 @@ exports.getStringStat = async (req, res) => {
 // 3. Get all strings with filtering
 exports.getAllStringStats = async (req, res) => {
   try {
-    // Build the where clause from query parameters
-    const where = buildWhereClause(req.query);
+    // Build the where clause from query parameters - DESTRUCTURE the result
+    const { where, filtersApplied } = buildWhereClause(req.query);
 
-    const { rows, count } = await StringStat.findAndCountAll({
-      where: where,
+    // Build query options conditionally
+    const queryOptions = {
       order: [['createdAt', 'DESC']],
       attributes: ['value', 'sha256_hash', 'properties', 'createdAt']
-    });
+    };
+
+    // Only add where clause if filters exist
+    if (where) {
+      queryOptions.where = where;
+    }
+
+    const { rows, count } = await StringStat.findAndCountAll(queryOptions);
 
     // Format the response data
     const data = rows.map(stat => ({
@@ -99,10 +105,10 @@ exports.getAllStringStats = async (req, res) => {
     res.status(200).json({
       data: data,
       count: count,
-      filters_applied: req.query 
+      filters_applied: filtersApplied 
     });
 
-  } catch (error) { // <-- THIS IS THE FIX. The stray '_' is removed.
+  } catch (error) {
     console.error('Error in getAllStringStats:', error);
     // Handle specific error for bad query parameters
     if (error.message.includes('Invalid query parameter')) {
@@ -124,15 +130,22 @@ exports.getNaturalLanguageStats = async (req, res) => {
     // 1. Parse the natural language query
     const parsedFilters = parseNaturalLanguageQuery(query);
 
-    // 2. Build the where clause from the parsed filters
-    const where = buildWhereClause(parsedFilters);
+    // 2. Build the where clause from the parsed filters - DESTRUCTURE the result
+    const { where, filtersApplied } = buildWhereClause(parsedFilters);
 
-    // 3. Fetch data from the database
-    const { rows, count } = await StringStat.findAndCountAll({
-      where: where,
+    // Build query options conditionally
+    const queryOptions = {
       order: [['createdAt', 'DESC']],
       attributes: ['value', 'sha256_hash', 'properties', 'createdAt']
-    });
+    };
+
+    // Only add where clause if filters exist
+    if (where) {
+      queryOptions.where = where;
+    }
+
+    // 3. Fetch data from the database
+    const { rows, count } = await StringStat.findAndCountAll(queryOptions);
 
     // 4. Format the response
     const data = rows.map(stat => ({
@@ -173,7 +186,6 @@ exports.deleteStringStat = async (req, res) => {
       return res.status(404).json({ error: 'String does not exist in the system' });
     }
 
-    // FIX: Corrected the res..send() typo
     res.status(204).send(); // 204 No Content
 
   } catch (error) {
@@ -181,4 +193,3 @@ exports.deleteStringStat = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
-

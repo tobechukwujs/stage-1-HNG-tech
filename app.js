@@ -1,23 +1,22 @@
-console.log("--- V3: Forcing all local fixes to deploy ---"); // <--- ADD THIS LINE
-
+console.log("--- V4: Final fix for all routes and logic ---");
 const express = require('express');
-const dotenv = require('dotenv');
-// Import sequelize from the model file to fix circular dependency
-const { sequelize } = require('./models/StringStat');
+const { sequelize } = require('./models/StringStat'); // Import from new location
 const stringRoutes = require('./routes/stringRoutes');
+const dotenv = require('dotenv'); // <--- THIS IS THE FIX
 
-dotenv.config();
+dotenv.config(); // Now this line will work
 
 const app = express();
-// Use the dynamic PORT from Railway or 3000 for local
-const port = process.env.PORT || 3001;
+// Use the dynamic PORT from Railway, or 3001 for local
+const port = process.env.PORT || 3001; 
 
 app.use(express.json());
 
 // Base API route
-app.use('/api', stringRoutes);
+// This is now '/', not '/api', so the bot can find your routes.
+app.use('/', stringRoutes);
 
-// Simple root route
+// Simple root route to show it's running
 app.get('/', (req, res) => {
   res.send('String Analyzer API is running!');
 });
@@ -29,12 +28,11 @@ sequelize.sync().then(() => {
   console.log('All models were synchronized successfully.');
   
   app.listen(port, () => {
-    // Log the actual port it's running on
+    // FIX: Log the actual port it's running on
     console.log(`Server is running on port ${port}`);
   });
 
 }).catch(err => {
   console.error('Unable to connect to the database:', err);
-  // Exit the process with an error code if the DB connection fails
-  process.exit(1); 
+  process.exit(1); // Exit the process with an error code
 });

@@ -3,30 +3,32 @@ const { Op } = require('sequelize');
 
 /**
  * Analyzes a string and computes all required properties.
- * @param {string} text - The input string to analyze.
+ * @param {string} str - The input string to analyze.
  * @returns {object} An object containing all computed properties.
  */
-function analyzeString(text) {
-  // ... [existing analyzeString function code] ...
-  const length = text.length;
-  
-  // Case-insensitive palindrome check
-  const normalizedText = text.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const is_palindrome = normalizedText.length > 0 && normalizedText === [...normalizedText].reverse().join('');
+function analyzeString(str) {
+  // 1. length
+  const length = str.length;
 
-  // Word count (splits by any whitespace)
-  const words = text.trim().split(/\s+/);
-  const word_count = words[0] === '' ? 0 : words.length;
+  // 2. is_palindrome (case-insensitive)
+  const cleanedStr = str.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const reversedStr = cleanedStr.split('').reverse().join('');
+  const is_palindrome = cleanedStr === reversedStr;
 
-  // Unique characters
-  const unique_characters = new Set(text).size;
+  // 3. unique_characters
+  const uniqueChars = new Set(str.split(''));
+  const unique_characters = uniqueChars.size;
 
-  // SHA-256 Hash
-  const sha256_hash = crypto.createHash('sha256').update(text).digest('hex');
+  // 4. word_count
+  const words = str.trim().split(/\s+/).filter(Boolean); // Split by whitespace
+  const word_count = str.trim() === '' ? 0 : words.length;
 
-  // Character frequency map
+  // 5. sha256_hash
+  const sha256_hash = crypto.createHash('sha256').update(str).digest('hex');
+
+  // 6. character_frequency_map
   const character_frequency_map = {};
-  for (const char of text) {
+  for (const char of str) {
     character_frequency_map[char] = (character_frequency_map[char] || 0) + 1;
   }
 
@@ -36,132 +38,118 @@ function analyzeString(text) {
     unique_characters,
     word_count,
     sha256_hash,
-    character_frequency_map
+    character_frequency_map,
   };
 }
 
 /**
- * Builds a Sequelize where clause from a filter object.
- * @param {object} filters - An object containing filter keys and values (e.g., req.query).
- * @returns {object} An object containing { whereClause, appliedFilters, validationError }.
+ * Builds a Sequelize 'where' clause from query parameters for JSONB filtering.
+ * @param {object} query - The query object from the request (e.g., req.query).
+ * @returns {object} A Sequelize 'where' clause object.
  */
-function buildWhereClause(filters) {
-  const whereClause = {};
-  const propertiesWhereClause = {};
-  const appliedFilters = {};
-  
-  // is_palindrome: boolean (true/false)
-  if (filters.is_palindrome !== undefined) {
-    if (filters.is_palindrome !== 'true' && filters.is_palindrome !== 'false') {
-      return { validationError: 'Invalid value for is_palindrome. Must be true or false.' };
-    }
-    propertiesWhereClause.is_palindrome = (filters.is_palindrome === 'true');
-    appliedFilters.is_palindrome = propertiesWhereClause.is_palindrome;
+function buildWhereClause(query) {
+  const where = {};
+  const filtersApplied = {};
+
+  // is_palindrome: boolean
+  if (query.is_palindrome === 'true' || query.is_palindrome === 'false') {
+    const isPalindromeBool = query.is_palindrome === 'true';
+    where['properties.is_palindrome'] = isPalindromeBool;
+    filtersApplied.is_palindrome = isPalindromeBool;
   }
 
+  // Build length filter object if needed
+  const lengthFilter = {};
+  
   // min_length: integer
-  let lengthFilter = {};
-  if (filters.min_length !== undefined) {
-    const minLength = parseInt(filters.min_length, 10);
-    if (isNaN(minLength)) {
-      return { validationError: 'Invalid value for min_length. Must be an integer.' };
-    }
+  if (query.min_length && !isNaN(parseInt(query.min_length))) {
+    const minLength = parseInt(query.min_length);
     lengthFilter[Op.gte] = minLength;
-    appliedFilters.min_length = minLength;
+    filtersApplied.min_length = minLength;
   }
 
   // max_length: integer
-  if (filters.max_length !== undefined) {
-    const maxLength = parseInt(filters.max_length, 10);
-    if (isNaN(maxLength)) {
-      return { validationError: 'Invalid value for max_length. Must be an integer.' };
-    }
+  if (query.max_length && !isNaN(parseInt(query.max_length))) {
+    const maxLength = parseInt(query.max_length);
     lengthFilter[Op.lte] = maxLength;
-    appliedFilters.max_length = maxLength;
+    filtersApplied.max_length = maxLength;
   }
 
+  // Only add length filter if it has conditions
   if (Object.keys(lengthFilter).length > 0) {
-    propertiesWhereClause.length = lengthFilter;
+    where['properties.length'] = lengthFilter;
   }
 
-  // word_count: integer
-  if (filters.word_count !== undefined) {
-    const wordCount = parseInt(filters.word_count, 10);
-    if (isNaN(wordCount)) {
-      return { validationError: 'Invalid value for word_count. Must be an integer.' };
-    }
-    propertiesWhereClause.word_count = wordCount;
-    appliedFilters.word_count = wordCount;
+  // word_count: integer (exact match)
+  if (query.word_count && !isNaN(parseInt(query.word_count))) {
+    const wordCount = parseInt(query.word_count);
+    where['properties.word_count'] = wordCount;
+    filtersApplied.word_count = wordCount;
   }
 
   // contains_character: string (single character)
-  if (filters.contains_character !== undefined) {
-    const char = filters.contains_character;
-    if (typeof char !== 'string' || char.length === 0) {
-      return { validationError: 'Invalid value for contains_character. Must be a string.' };
-    }
-  
-    propertiesWhereClause[`character_frequency_map.${char}`] = { [Op.gt]: 0 };
-    appliedFilters.contains_character = char;
+  if (query.contains_character && query.contains_character.length === 1) {
+    const char = query.contains_character;
+    // Correct way to check if a key exists in the JSONB map
+    where[`properties.character_frequency_map.${char}`] = {
+      [Op.ne]: null,
+    };
+    filtersApplied.contains_character = char;
   }
 
-  // Assign the properties filter to the main where clause
-  if (Object.keys(propertiesWhereClause).length > 0) {
-    whereClause.properties = propertiesWhereClause;
-  }
-
-  return { whereClause, appliedFilters, validationError: null };
+  // Return null for where if no filters were applied
+  return { 
+    where: Object.keys(where).length > 0 ? where : null, 
+    filtersApplied 
+  };
 }
 
 /**
  * Parses a natural language query into a filter object.
  * @param {string} query - The natural language query string.
- * @returns {object} A filter object compatible with buildWhereClause.
+ * @returns {object} A filter object that can be used by buildWhereClause.
  */
 function parseNaturalLanguageQuery(query) {
+  const normalizedQuery = query.toLowerCase().trim();
   const filters = {};
-  const lowerQuery = query.toLowerCase();
 
-  if (lowerQuery.includes('palindromic') || lowerQuery.includes('palindrome')) {
+  // Example 1: "all single word palindromic strings"
+  if (normalizedQuery.includes('single word') || normalizedQuery.includes('one word')) {
+    filters.word_count = '1';
+  }
+  if (normalizedQuery.includes('palindromic') || normalizedQuery.includes('palindrome')) {
     filters.is_palindrome = 'true';
   }
 
-  if (lowerQuery.includes('single word')) {
-    filters.word_count = '1';
+  // Example 2: "strings longer than 10 characters"
+  const lengthMatch = normalizedQuery.match(/(longer|greater) than (\d+) characters?/);
+  if (lengthMatch && lengthMatch[2]) {
+    // "longer than 10" means "at least 11"
+    filters.min_length = (parseInt(lengthMatch[2]) + 1).toString();
   }
 
-  const longerMatch = lowerQuery.match(/longer than (\d+) characters/);
-  if (longerMatch && longerMatch[1]) {
-    // "longer than 10" means min_length = 11
-    filters.min_length = (parseInt(longerMatch[1], 10) + 1).toString();
+  // Example 3: "palindromic strings that contain the first vowel"
+  if (normalizedQuery.includes('first vowel')) {
+    filters.is_palindrome = 'true'; // Make sure this is included
+    filters.contains_character = 'a'; // Heuristic
   }
 
-  if (lowerQuery.includes('first vowel')) {
-    filters.contains_character = 'a';
-  }
-
-  const letterMatch = lowerQuery.match(/containing the letter "([^"]+)"/i); // e.g., "a"
+  // Example 4: "strings containing the letter z"
+  const letterMatch = normalizedQuery.match(/containing the letter ([a-z])/);
   if (letterMatch && letterMatch[1]) {
-    filters.contains_character = letterMatch[1].toLowerCase();
-  } else {
-    
-    const simpleLetterMatch = lowerQuery.match(/containing the letter ([a-z])$/i);
-    if (simpleLetterMatch && simpleLetterMatch[1]) {
-      filters.contains_character = simpleLetterMatch[1].toLowerCase();
-    }
+    filters.contains_character = letterMatch[1];
   }
 
-  // Check for conflicting filters (basic example)
-  if (lowerQuery.includes('palindromic') && lowerQuery.includes('not palindromic')) {
-    filters.conflict = true; // Mark as conflicting
+  // Conflict check (example)
+  if (filters.min_length && filters.max_length && parseInt(filters.min_length) > parseInt(filters.max_length)) {
+    throw new Error('Conflicting filters: min_length cannot be greater than max_length');
   }
 
   return filters;
 }
 
-module.exports = { 
+module.exports = {
   analyzeString,
   buildWhereClause,
-  parseNaturalLanguageQuery
+  parseNaturalLanguageQuery,
 };
-
