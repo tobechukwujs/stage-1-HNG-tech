@@ -1,42 +1,39 @@
 require('dotenv').config();
 const express = require('express');
-const { sequelize } = require('./config/database');
+const sequelize = require('./config/database');
 const stringRoutes = require('./routes/stringRoutes');
-const StringStat = require('./models/StringStat');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// FIX: Use the PORT environment variable provided by Railway, or 3000 as a fallback
+const port = process.env.PORT || 3000;
 
-// --- Middleware ---
-// Parse JSON request bodies
+// Middleware to parse JSON bodies
 app.use(express.json());
 
-// --- Routes ---
+// API Routes
+app.use('/api', stringRoutes);
 
-app.use('/api', stringRoutes); // You can prefix with /api or not
-app.use('/', (req, res) => {
-  res.status(200).json({ message: 'Welcome to the String Analyzer API' });
+// Base route to check if server is up
+app.get('/', (req, res) => {
+  res.send('String Analyzer API is running!');
 });
 
+// Error handling middleware (optional but good practice)
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
+});
 
-async function startServer() {
-  try {
+// Connect to database and start the server
+sequelize.sync().then(() => {
+  console.log('Database connection has been established successfully.');
+  console.log('All models were synchronized successfully.');
+  
+  app.listen(port, () => {
+    // FIX: Log the actual port it's running on
+    console.log(`Server is running on port ${port}`);
+  });
 
-    await sequelize.authenticate();
-    console.log('Database connection has been established successfully.');
-
- 
-    await sequelize.sync({ alter: true }); 
-    console.log('All models were synchronized successfully.');
-
-    
-    app.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
-    });
-  } catch (error) {
-    console.error('Unable to connect to the database or start server:', error);
-    process.exit(1); 
-  }
-}
-
-startServer();
+}).catch(err => {
+  console.error('Unable to connect to the database:', err);
+});
