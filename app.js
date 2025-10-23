@@ -1,3 +1,5 @@
+console.log("--- V3: Forcing all local fixes to deploy ---"); // <--- ADD THIS LINE
+
 const express = require('express');
 const dotenv = require('dotenv');
 // Import sequelize from the model file to fix circular dependency
