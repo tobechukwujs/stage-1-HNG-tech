@@ -1,32 +1,53 @@
-require('dotenv').config(); // Loads .env file for local development
+require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
-// Get the database URL from environment variables
+console.log('Initializing database configuration...');
+
 const dbUrl = process.env.DATABASE_URL;
+const isProduction = process.env.NODE_ENV === 'production';
 
 if (!dbUrl) {
+  console.error('FATAL ERROR: DATABASE_URL environment variable is not set!');
   throw new Error("DATABASE_URL environment variable is not set!");
+} else {
+  // Do not log the full URL for security
+  console.log('DATABASE_URL variable is present.');
 }
-
-// Check if we are in production (Railway sets this to 'production')
-const isProduction = process.env.NODE_ENV === 'production';
 
 // Define Sequelize options
 const options = {
   dialect: 'postgres',
-  logging: false, // Turn off query logging in production
+  // Log queries to the console. Remove this in final production.
+  logging: (msg) => console.log(msg),
+  pool: {
+    max: 5,
+    min: 0,
+    acquire: 30000,
+    idle: 10000
+  }
 };
 
-// Add SSL configuration ONLY for production (this is the fix)
 if (isProduction) {
+  console.log('Running in production. Adding SSL config.');
   options.dialectOptions = {
     ssl: {
       require: true,
-      rejectUnauthorized: false // This allows it to connect on Railway/Heroku
+      rejectUnauthorized: false
     }
   };
+} else {
+  console.log('Running in development. No SSL config.');
 }
 
-const sequelize = new Sequelize(dbUrl, options);
+let sequelize;
+
+try {
+  console.log('Attempting to create new Sequelize instance...');
+  sequelize = new Sequelize(dbUrl, options);
+  console.log('Sequelize instance created successfully.');
+} catch (error) {
+  console.error('CRITICAL: Failed to create Sequelize instance:', error);
+  throw error; // Re-throw to crash the app, which is correct
+}
 
 module.exports = sequelize;
