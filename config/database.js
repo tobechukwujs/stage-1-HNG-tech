@@ -17,13 +17,14 @@ const options = {
   logging: false, // Turn off query logging in production
 };
 
-// Add SSL configuration ONLY for production, if needed.
-// Railway's internal networking often doesn't require SSL,
-// but many other production DBs do. We'll start WITHOUT it,
-// as that's the most likely fix.
+// Add SSL configuration ONLY for production (this is the fix)
 if (isProduction) {
-  // We'll assume Railway's internal network doesn't need SSL.
-  // If this still fails, we would add dialectOptions here.
+  options.dialectOptions = {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false // This allows it to connect on Railway/Heroku
+    }
+  };
 }
 
 const sequelize = new Sequelize(dbUrl, options);
