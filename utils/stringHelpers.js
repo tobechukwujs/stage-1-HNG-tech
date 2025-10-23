@@ -100,8 +100,7 @@ function buildWhereClause(filters) {
     if (typeof char !== 'string' || char.length === 0) {
       return { validationError: 'Invalid value for contains_character. Must be a string.' };
     }
-    // This queries the JSONB character_frequency_map
-    // e.g., properties.character_frequency_map['a'] > 0
+  
     propertiesWhereClause[`character_frequency_map.${char}`] = { [Op.gt]: 0 };
     appliedFilters.contains_character = char;
   }
@@ -145,7 +144,7 @@ function parseNaturalLanguageQuery(query) {
   if (letterMatch && letterMatch[1]) {
     filters.contains_character = letterMatch[1].toLowerCase();
   } else {
-    // Fallback for ...containing the letter z (without quotes)
+    
     const simpleLetterMatch = lowerQuery.match(/containing the letter ([a-z])$/i);
     if (simpleLetterMatch && simpleLetterMatch[1]) {
       filters.contains_character = simpleLetterMatch[1].toLowerCase();
