@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
+// Add console logs to see what's happening in Railway
 console.log('Initializing database configuration...');
 
 const dbUrl = process.env.DATABASE_URL;
@@ -17,14 +18,7 @@ if (!dbUrl) {
 // Define Sequelize options
 const options = {
   dialect: 'postgres',
-  // Log queries to the console. Remove this in final production.
-  logging: (msg) => console.log(msg),
-  pool: {
-    max: 5,
-    min: 0,
-    acquire: 30000,
-    idle: 10000
-  }
+  logging: false, // Turn off query logging
 };
 
 if (isProduction) {
@@ -32,7 +26,7 @@ if (isProduction) {
   options.dialectOptions = {
     ssl: {
       require: true,
-      rejectUnauthorized: false
+      rejectUnauthorized: false // This allows it to connect on Railway
     }
   };
 } else {
@@ -50,4 +44,5 @@ try {
   throw error; // Re-throw to crash the app, which is correct
 }
 
+// Export the instance
 module.exports = sequelize;

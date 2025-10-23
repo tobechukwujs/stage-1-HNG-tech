@@ -1,208 +1,184 @@
-const StringStat = require('../models/StringStat');
-const { analyzeString, buildWhereClause, parseNaturalLanguageQuery } = require('../utils/stringHelpers');
-const { Sequelize, Op } = require('sequelize');
+// Import the StringStat model from the new destructured export
+const { StringStat } = require('../models/StringStat');
+const { Op } = require('sequelize');
+const crypto = require('crypto');
+const { 
+  analyzeString, 
+  buildWhereClause, 
+  parseNaturalLanguageQuery 
+} = require('../utils/stringHelpers');
 
-/**
- * 1. Create/Analyze String
- * POST /strings
- */
+// 1. Create/Analyze a new string
 exports.createStringStat = async (req, res) => {
+  const { value } = req.body;
+
+  if (typeof value !== 'string' || value.trim() === '') {
+    return res.status(400).json({ 
+      error: 'Invalid request body. "value" must be a non-empty string.' 
+    });
+  }
+
+  // 1. Check for existing string (using the value itself, not the hash)
   try {
-    const { value } = req.body;
-
-    // 400 Bad Request: Invalid request body or missing "value" field
-    if (!value) {
-      return res.status(400).json({ error: 'Invalid request body or missing "value" field' });
+    const existingString = await StringStat.findOne({ where: { value } });
+    if (existingString) {
+      return res.status(409).json({ 
+        error: 'String already exists in the system',
+        data: existingString
+      });
     }
 
-    // 422 Unprocessable Entity: Invalid data type for "value"
-    if (typeof value !== 'string') {
-      return res.status(422).json({ error: 'Invalid data type for "value" (must be string)' });
-    }
-
-    // Compute all properties
+    // 2. Analyze the string
     const properties = analyzeString(value);
-
-    // Create the record in the database
+    
+    // 3. Create in database
     const newStringStat = await StringStat.create({
       value: value,
       sha256_hash: properties.sha256_hash,
-      properties: properties, // Store the full object in the JSONB column
+      properties: properties
     });
 
-    // 201 Created: Return the success response
-    return res.status(201).json({
-      id: newStringStat.id, // Using the auto-generated UUID
+    // 4. Return the full response
+    res.status(201).json({
+      id: newStringStat.sha256_hash,
       value: newStringStat.value,
       properties: newStringStat.properties,
-      created_at: newStringStat.createdAt.toISOString()
+      created_at: newStringStat.createdAt
     });
 
   } catch (error) {
-    // 409 Conflict: String already exists (detected by unique constraint on sha256_hash)
-    if (error instanceof Sequelize.UniqueConstraintError) {
-      return res.status(409).json({ error: 'String already exists in the system' });
-    }
-
-    // Generic server error
     console.error('Error in createStringStat:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
-
-// 2. Get Specific String
-// GET /strings/{string_value}
+// 2. Get a specific string by its value
 exports.getStringStat = async (req, res) => {
   try {
     const { string_value } = req.params;
+    const stringStat = await StringStat.findOne({ where: { value: string_value } });
 
-    // Find the string stat by its 'value' field
-    const stringStat = await StringStat.findOne({
-      where: { value: string_value }
-    });
-
-    // 404 Not Found: String does not exist
     if (!stringStat) {
+      // FIX: Changed status code from 44 to 404
       return res.status(404).json({ error: 'String does not exist in the system' });
     }
 
-    // 200 OK: Return the success response
-    return res.status(200).json({
-      id: stringStat.id,
+    res.status(200).json({
+      id: stringStat.sha256_hash,
       value: stringStat.value,
       properties: stringStat.properties,
-      created_at: stringStat.createdAt.toISOString()
+      created_at: stringStat.createdAt
     });
 
   } catch (error) {
     console.error('Error in getStringStat:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
-// 3. Get All Strings with Filtering
-// GET /strings
+// 3. Get all strings with filtering
 exports.getAllStringStats = async (req, res) => {
   try {
     // Build the where clause from query parameters
-    const { whereClause, appliedFilters, validationError } = buildWhereClause(req.query);
+    const where = buildWhereClause(req.query);
 
-    // 400 Bad Request: Invalid query parameter values
-    if (validationError) {
-      return res.status(400).json({ error: validationError });
-    }
-
-    // Find all records that match the where clause
-    const { count, rows } = await StringStat.findAndCountAll({
-      where: whereClause,
-      attributes: ['id', 'value', 'properties', 'createdAt'], // Select specific fields
-      order: [['createdAt', 'DESC']] // Order by creation date
+    const { rows, count } = await StringStat.findAndCountAll({
+      where: where,
+      order: [['createdAt', 'DESC']],
+      attributes: ['value', 'sha256_hash', 'properties', 'createdAt']
     });
 
-    // 200 OK: Format and return the response
-    const responseData = rows.map(stat => ({
-      id: stat.id,
+    // Format the response data
+    const data = rows.map(stat => ({
+      id: stat.sha256_hash,
       value: stat.value,
       properties: stat.properties,
-      created_at: stat.createdAt.toISOString()
+      created_at: stat.createdAt
     }));
 
-    return res.status(200).json({
-      data: responseData,
+    res.status(200).json({
+      data: data,
       count: count,
-      filters_applied: appliedFilters
+      filters_applied: req.query 
     });
 
-  } catch (error) {
+  } catch (error) { // <-- THIS IS THE FIX. The stray '_' is removed.
     console.error('Error in getAllStringStats:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    // Handle specific error for bad query parameters
+    if (error.message.includes('Invalid query parameter')) {
+      return res.status(400).json({ error: 'Invalid query parameter values or types' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
 // 4. Natural Language Filtering
-// GET /filter-by-natural-language
-exports.filterByNaturalLanguage = async (req, res) => {
-  try {
-    const { query } = req.query;
+exports.getNaturalLanguageStats = async (req, res) => {
+  const { query } = req.query;
 
-    // 400 Bad Request: Missing query
-    if (!query || typeof query !== 'string') {
-      return res.status(400).json({ error: 'Missing or invalid "query" parameter.' });
-    }
-    
-    // 1. Parse the natural language query into a filter object
+  if (!query) {
+    return res.status(400).json({ error: 'Missing "query" parameter' });
+  }
+
+  try {
+    // 1. Parse the natural language query
     const parsedFilters = parseNaturalLanguageQuery(query);
 
-    // 422 Unprocessable Entity: Conflicting filters
-    if (parsedFilters.conflict) {
-      return res.status(422).json({ error: 'Query parsed but resulted in conflicting filters' });
-    }
-
-    // 400 Bad Request: Unable to parse
-    if (Object.keys(parsedFilters).length === 0) {
-      return res.status(400).json({ error: 'Unable to parse natural language query' });
-    }
-
     // 2. Build the where clause from the parsed filters
-    const { whereClause, appliedFilters, validationError } = buildWhereClause(parsedFilters);
+    const where = buildWhereClause(parsedFilters);
 
-    if (validationError) {
-      // This should ideally not happen if parseNaturalLanguageQuery is correct
-      return res.status(400).json({ error: `Parsing error: ${validationError}` });
-    }
-
-    // 3. Find matching records
-    const { count, rows } = await StringStat.findAndCountAll({
-      where: whereClause,
-      attributes: ['id', 'value', 'properties', 'createdAt'],
-      order: [['createdAt', 'DESC']]
+    // 3. Fetch data from the database
+    const { rows, count } = await StringStat.findAndCountAll({
+      where: where,
+      order: [['createdAt', 'DESC']],
+      attributes: ['value', 'sha256_hash', 'properties', 'createdAt']
     });
 
-    // 4. Format and return the response
-    const responseData = rows.map(stat => ({
-      id: stat.id,
+    // 4. Format the response
+    const data = rows.map(stat => ({
+      id: stat.sha256_hash,
       value: stat.value,
       properties: stat.properties,
-      created_at: stat.createdAt.toISOString()
+      created_at: stat.createdAt
     }));
-
-    return res.status(200).json({
-      data: responseData,
+    
+    res.status(200).json({
+      data: data,
       count: count,
       interpreted_query: {
         original: query,
-        parsed_filters: appliedFilters
+        parsed_filters: parsedFilters
       }
     });
 
   } catch (error) {
-    console.error('Error in filterByNaturalLanguage:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Error in getNaturalLanguageStats:', error);
+    if (error.message.includes('Unable to parse') || error.message.includes('Conflicting filters')) {
+      const status = error.message.includes('Conflicting') ? 422 : 400;
+      return res.status(status).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
-// 5. Delete String
-// DELETE /strings/{string_value}
+// 5. Delete a specific string by its value
 exports.deleteStringStat = async (req, res) => {
   try {
     const { string_value } = req.params;
-
-    // Attempt to delete the record by its 'value'
-    const deletedCount = await StringStat.destroy({
+    const result = await StringStat.destroy({
       where: { value: string_value }
     });
 
-    // 404 Not Found: String does not exist
-    if (deletedCount === 0) {
+    if (result === 0) {
       return res.status(404).json({ error: 'String does not exist in the system' });
     }
 
-    // 204 No Content: Success
-    return res.status(204).send();
+    // FIX: Corrected the res..send() typo
+    res.status(204).send(); // 204 No Content
 
   } catch (error) {
     console.error('Error in deleteStringStat:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
+

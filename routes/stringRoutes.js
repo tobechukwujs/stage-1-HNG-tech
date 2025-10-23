@@ -2,27 +2,20 @@ const express = require('express');
 const router = express.Router();
 const stringController = require('../controllers/stringController');
 
-// --- Define API routes ---
-
-// 1. Create/Analyze String
-// POST /strings
+// 1. Create/Analyze a new string
 router.post('/strings', stringController.createStringStat);
 
-// 2. Get Specific String
-// GET /strings/{string_value}
+// 2. Get a specific string by its value
 router.get('/strings/:string_value', stringController.getStringStat);
 
-// 3. Get All Strings with Filtering
-// GET /strings
-router.get('/strings', stringController.getAllStringStats); // Now active
+// 3. Get all strings with filtering
+router.get('/strings', stringController.getAllStringStats);
 
 // 4. Natural Language Filtering
-// GET /strings/filter-by-natural-language
-router.get('/filter-by-natural-language', stringController.filterByNaturalLanguage); // Now active
+router.get('/strings/filter-by-natural-language', stringController.getNaturalLanguageStats);
 
-// 5. Delete String
-// DELETE /strings/{string_value}
-router.delete('/strings/:string_value', stringController.deleteStringStat); // Now active
-
+// 5. Delete a specific string by its value
+router.delete('/strings/:string_value', stringController.deleteStringStat);
 
 module.exports = router;
+
