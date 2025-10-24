@@ -10,36 +10,50 @@ const {
 
 // 1. Create/Analyze a new string
 exports.createStringStat = async (req, res) => {
-  const { value } = req.body;
-
-  if (typeof value !== 'string' || value.trim() === '') {
-    return res.status(400).json({ 
-      error: 'Invalid request body. "value" must be a non-empty string.' 
-    });
-  }
-
-  // 1. Check for existing string (using the value itself, not the hash)
   try {
-    const existingString = await StringStat.findOne({ where: { value } });
-    if (existingString) {
-      return res.status(409).json({ 
-        error: 'String already exists in the system',
-        data: existingString
+    const { value } = req.body;
+
+    // Check if value field exists
+    if (value === undefined || value === null) {
+      return res.status(400).json({ 
+        error: 'Invalid request body. Missing "value" field.' 
       });
     }
 
-    // 2. Analyze the string
+    // Check if value is a string
+    if (typeof value !== 'string') {
+      return res.status(422).json({ 
+        error: 'Invalid data type for "value". Must be a string.' 
+      });
+    }
+
+    // Check if value is not empty after trimming
+    if (value.trim() === '') {
+      return res.status(400).json({ 
+        error: 'Invalid request body. "value" must be a non-empty string.' 
+      });
+    }
+
+    // Check for existing string
+    const existingString = await StringStat.findOne({ where: { value } });
+    if (existingString) {
+      return res.status(409).json({ 
+        error: 'String already exists in the system'
+      });
+    }
+
+    // Analyze the string
     const properties = analyzeString(value);
     
-    // 3. Create in database
+    // Create in database
     const newStringStat = await StringStat.create({
       value: value,
       sha256_hash: properties.sha256_hash,
       properties: properties
     });
 
-    // 4. Return the full response
-    res.status(201).json({
+    // Return the full response
+    return res.status(201).json({
       id: newStringStat.sha256_hash,
       value: newStringStat.value,
       properties: newStringStat.properties,
@@ -48,7 +62,8 @@ exports.createStringStat = async (req, res) => {
 
   } catch (error) {
     console.error('Error in createStringStat:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -56,13 +71,18 @@ exports.createStringStat = async (req, res) => {
 exports.getStringStat = async (req, res) => {
   try {
     const { string_value } = req.params;
+    
+    if (!string_value) {
+      return res.status(400).json({ error: 'String value is required' });
+    }
+
     const stringStat = await StringStat.findOne({ where: { value: string_value } });
 
     if (!stringStat) {
       return res.status(404).json({ error: 'String does not exist in the system' });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       id: stringStat.sha256_hash,
       value: stringStat.value,
       properties: stringStat.properties,
@@ -71,30 +91,27 @@ exports.getStringStat = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getStringStat:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
 // 3. Get all strings with filtering
 exports.getAllStringStats = async (req, res) => {
   try {
-    // Build the where clause from query parameters - DESTRUCTURE the result
     const { where, filtersApplied } = buildWhereClause(req.query);
 
-    // Build query options conditionally
     const queryOptions = {
       order: [['createdAt', 'DESC']],
       attributes: ['value', 'sha256_hash', 'properties', 'createdAt']
     };
 
-    // Only add where clause if filters exist
     if (where) {
       queryOptions.where = where;
     }
 
     const { rows, count } = await StringStat.findAndCountAll(queryOptions);
 
-    // Format the response data
     const data = rows.map(stat => ({
       id: stat.sha256_hash,
       value: stat.value,
@@ -102,7 +119,7 @@ exports.getAllStringStats = async (req, res) => {
       created_at: stat.createdAt
     }));
 
-    res.status(200).json({
+    return res.status(200).json({
       data: data,
       count: count,
       filters_applied: filtersApplied 
@@ -110,44 +127,38 @@ exports.getAllStringStats = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getAllStringStats:', error);
-    // Handle specific error for bad query parameters
-    if (error.message.includes('Invalid query parameter')) {
+    console.error('Error stack:', error.stack);
+    if (error.message && error.message.includes('Invalid query parameter')) {
       return res.status(400).json({ error: 'Invalid query parameter values or types' });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
 // 4. Natural Language Filtering
 exports.getNaturalLanguageStats = async (req, res) => {
-  const { query } = req.query;
-
-  if (!query) {
-    return res.status(400).json({ error: 'Missing "query" parameter' });
-  }
-
   try {
-    // 1. Parse the natural language query
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ error: 'Missing "query" parameter' });
+    }
+
     const parsedFilters = parseNaturalLanguageQuery(query);
 
-    // 2. Build the where clause from the parsed filters - DESTRUCTURE the result
     const { where, filtersApplied } = buildWhereClause(parsedFilters);
 
-    // Build query options conditionally
     const queryOptions = {
       order: [['createdAt', 'DESC']],
       attributes: ['value', 'sha256_hash', 'properties', 'createdAt']
     };
 
-    // Only add where clause if filters exist
     if (where) {
       queryOptions.where = where;
     }
 
-    // 3. Fetch data from the database
     const { rows, count } = await StringStat.findAndCountAll(queryOptions);
 
-    // 4. Format the response
     const data = rows.map(stat => ({
       id: stat.sha256_hash,
       value: stat.value,
@@ -155,7 +166,7 @@ exports.getNaturalLanguageStats = async (req, res) => {
       created_at: stat.createdAt
     }));
     
-    res.status(200).json({
+    return res.status(200).json({
       data: data,
       count: count,
       interpreted_query: {
@@ -166,11 +177,12 @@ exports.getNaturalLanguageStats = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getNaturalLanguageStats:', error);
-    if (error.message.includes('Unable to parse') || error.message.includes('Conflicting filters')) {
+    console.error('Error stack:', error.stack);
+    if (error.message && (error.message.includes('Unable to parse') || error.message.includes('Conflicting filters'))) {
       const status = error.message.includes('Conflicting') ? 422 : 400;
       return res.status(status).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -178,6 +190,11 @@ exports.getNaturalLanguageStats = async (req, res) => {
 exports.deleteStringStat = async (req, res) => {
   try {
     const { string_value } = req.params;
+    
+    if (!string_value) {
+      return res.status(400).json({ error: 'String value is required' });
+    }
+
     const result = await StringStat.destroy({
       where: { value: string_value }
     });
@@ -186,10 +203,11 @@ exports.deleteStringStat = async (req, res) => {
       return res.status(404).json({ error: 'String does not exist in the system' });
     }
 
-    res.status(204).send(); // 204 No Content
+    return res.status(204).send();
 
   } catch (error) {
     console.error('Error in deleteStringStat:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
