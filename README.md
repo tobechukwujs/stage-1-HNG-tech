@@ -60,8 +60,8 @@ PostgreSQL running on your machine.
 
 2. Clone the Repository
 
-git clone [https://github.com/your-username/your-repo-name.git](https://github.com/your-username/your-repo-name.git)
-cd your-repo-name
+git clone https://github.com/tobechukwujs/stage-1-HNG-tech
+cd https://github.com/tobechukwujs/stage-1-HNG-tech
 
 
 3. Install Dependencies
@@ -86,4 +86,4 @@ This command will start the server with nodemon, which automatically syncs your 
 npm run dev
 
 
-The server will be running at http://localhost:3000.
+The server will be running at https://stage-1-hng-tech-production-8d53.up.railway.app/.

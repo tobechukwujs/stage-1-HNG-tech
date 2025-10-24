@@ -1,4 +1,4 @@
-// Import the StringStat model from the new destructured export
+
 const { StringStat } = require('../models/StringStat');
 const { Op } = require('sequelize');
 const crypto = require('crypto');
@@ -8,33 +8,32 @@ const {
   parseNaturalLanguageQuery 
 } = require('../utils/stringHelpers');
 
-// 1. Create/Analyze a new string
+
 exports.createStringStat = async (req, res) => {
   try {
     const { value } = req.body;
 
-    // Check if value field exists
+   
     if (value === undefined || value === null) {
       return res.status(400).json({ 
         error: 'Invalid request body. Missing "value" field.' 
       });
     }
 
-    // Check if value is a string
     if (typeof value !== 'string') {
       return res.status(422).json({ 
         error: 'Invalid data type for "value". Must be a string.' 
       });
     }
 
-    // Check if value is not empty after trimming
+    
     if (value.trim() === '') {
       return res.status(400).json({ 
         error: 'Invalid request body. "value" must be a non-empty string.' 
       });
     }
 
-    // Check for existing string
+   
     const existingString = await StringStat.findOne({ where: { value } });
     if (existingString) {
       return res.status(409).json({ 
@@ -42,17 +41,14 @@ exports.createStringStat = async (req, res) => {
       });
     }
 
-    // Analyze the string
     const properties = analyzeString(value);
     
-    // Create in database
     const newStringStat = await StringStat.create({
       value: value,
       sha256_hash: properties.sha256_hash,
       properties: properties
     });
 
-    // Return the full response
     return res.status(201).json({
       id: newStringStat.sha256_hash,
       value: newStringStat.value,
@@ -67,7 +63,6 @@ exports.createStringStat = async (req, res) => {
   }
 };
 
-// 2. Get a specific string by its value
 exports.getStringStat = async (req, res) => {
   try {
     const { string_value } = req.params;
@@ -96,7 +91,6 @@ exports.getStringStat = async (req, res) => {
   }
 };
 
-// 3. Get all strings with filtering
 exports.getAllStringStats = async (req, res) => {
   try {
     const { where, filtersApplied } = buildWhereClause(req.query);
@@ -135,7 +129,6 @@ exports.getAllStringStats = async (req, res) => {
   }
 };
 
-// 4. Natural Language Filtering
 exports.getNaturalLanguageStats = async (req, res) => {
   try {
     const { query } = req.query;
@@ -186,7 +179,6 @@ exports.getNaturalLanguageStats = async (req, res) => {
   }
 };
 
-// 5. Delete a specific string by its value
 exports.deleteStringStat = async (req, res) => {
   try {
     const { string_value } = req.params;

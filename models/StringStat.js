@@ -1,8 +1,6 @@
 const { Sequelize, DataTypes } = require('sequelize');
-// Import sequelize from config
 const sequelize = require('../config/database');
 
-// Define the model
 const StringStat = sequelize.define('StringStat', {
   id: {
     type: DataTypes.UUID,
@@ -25,6 +23,5 @@ const StringStat = sequelize.define('StringStat', {
   }
 });
 
-// Export BOTH the model AND the sequelize instance
 module.exports = { StringStat, sequelize };
 

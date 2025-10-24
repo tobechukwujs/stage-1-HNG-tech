@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
-// Add console logs to see what's happening in Railway
+
 console.log('Initializing database configuration...');
 
 const dbUrl = process.env.DATABASE_URL;
@@ -11,11 +11,10 @@ if (!dbUrl) {
   console.error('FATAL ERROR: DATABASE_URL environment variable is not set!');
   throw new Error("DATABASE_URL environment variable is not set!");
 } else {
-  // Do not log the full URL for security
+
   console.log('DATABASE_URL variable is present.');
 }
 
-// Define Sequelize options
 const options = {
   dialect: 'postgres',
   logging: false, // Turn off query logging
@@ -26,7 +25,7 @@ if (isProduction) {
   options.dialectOptions = {
     ssl: {
       require: true,
-      rejectUnauthorized: false // This allows it to connect on Railway
+      rejectUnauthorized: false 
     }
   };
 } else {
@@ -44,5 +43,4 @@ try {
   throw error; // Re-throw to crash the app, which is correct
 }
 
-// Export the instance
 module.exports = sequelize;

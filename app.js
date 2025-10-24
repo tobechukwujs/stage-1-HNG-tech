@@ -11,7 +11,6 @@ const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 
-// Health check endpoint - BEFORE other routes
 app.get('/', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -20,11 +19,9 @@ app.get('/', (req, res) => {
   });
 });
 
-// API routes
 app.use('/', stringRoutes);
 
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({ 
     error: 'Not Found',
@@ -33,7 +30,6 @@ app.use((req, res) => {
   });
 });
 
-// Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(500).json({ 
@@ -42,13 +38,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Connect to database and start the server
 sequelize.sync()
   .then(() => {
     console.log('Database connection has been established successfully.');
     console.log('All models were synchronized successfully.');
     
-    // CRITICAL: Bind to 0.0.0.0 for Railway
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server is running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -59,7 +53,6 @@ sequelize.sync()
     process.exit(1);
   });
 
-// Handle uncaught errors
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
   process.exit(1);
