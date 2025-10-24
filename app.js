@@ -21,7 +21,8 @@ app.get('/', (req, res) => {
 });
 
 // API routes
-app.use('/api', stringRoutes);
+app.use('/', stringRoutes);
+
 
 // 404 handler
 app.use((req, res) => {
